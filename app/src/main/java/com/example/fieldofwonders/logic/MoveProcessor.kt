@@ -20,7 +20,6 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
             processSpinResult(currentState, sectorOrNullForGuess)
         } else if (input.isNotEmpty() && sectorOrNullForGuess != null) {
             // Фаза 2: Обработка угадывания
-            // FIX 6: Убираем Элвис, sectorOrNullForGuess не null здесь
             val sectorForGuess: DrumSector = sectorOrNullForGuess
             // Проверяем, позволяет ли сектор угадывать (на всякий случай, хотя spinResult должен был перейти ход)
             if (sectorForGuess is DrumSector.Bankrupt || sectorForGuess is DrumSector.Zero) {
@@ -28,7 +27,6 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
                 // Возвращаем ошибку или просто сообщение о переходе хода, как будто спин только что произошел
                 return processSpinResult(currentState, sectorForGuess) // Повторно обработаем сектор для перехода хода
             }
-            // FIX 7: Передаем non-null сектор в processGuess
             processGuess(currentState, sectorForGuess, input)
         }
         else {
@@ -45,35 +43,23 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
     // Фаза 1: Обработка результата вращения барабана
     private fun processSpinResult(state: GameState, sector: DrumSector): Pair<Boolean, String> {
         println("MoveProcessor: Phase 1 - Processing Spin Result. Sector: $sector, Player: ${state.currentPlayerIndex}")
-        var message = "Выпал сектор: $sector."
+
         var turnEnds = false
-        var nextPlayerIndex = state.currentPlayerIndex
         var players = state.players
-        // FIX 8: Удаляем неиспользуемую переменную currentScore
-        // var currentScore = players[state.currentPlayerIndex].score
+        var nextPlayerIndex = state.currentPlayerIndex
         var newLastSector: DrumSector? = sector // Сохраняем сектор для возможного угадывания
 
         when (sector) {
             is DrumSector.Bankrupt -> {
-                message += " Ваш счет сгорел! Переход хода."
-                players = updatePlayerScore(players, state.currentPlayerIndex, 0) // Обнуляем счет
+                players = updatePlayerScore(players, state.currentPlayerIndex, 0)
                 turnEnds = true
             }
             is DrumSector.Zero -> {
-                message += " Вы пропускаете ход."
                 turnEnds = true
             }
-            is DrumSector.Plus -> {
-                message += " Назовите букву!" // Сектор Плюс обычно для открытия буквы по номеру, но здесь - угадать
-                // Игрок должен угадывать, ход не переходит сразу.
-            }
-            is DrumSector.Double -> {
-                message += " Очки удвоятся! Назовите букву или слово."
-                // Игрок должен угадывать, ход не переходит сразу.
-            }
-            is DrumSector.Points -> {
-                message += " Назовите букву или слово."
-                // Игрок должен угадывать, ход не переходит сразу.
+            // Для Points, Plus, Double - turnEnds остается false по умолчанию
+            is DrumSector.Plus, is DrumSector.Double, is DrumSector.Points -> {
+                // Ничего дополнительно делать не нужно, ход продолжается
             }
         }
 
@@ -93,20 +79,18 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
         )
         gameStateManager.updateState(newState)
         // Успех = ход НЕ закончился (игрок может угадывать)
-        return Pair(!turnEnds, message)
+        return Pair(!turnEnds, "")
     }
 
     // Фаза 2: Обработка угадывания буквы или слова
-    // FIX 7: Параметр sector теперь non-null
     private fun processGuess(state: GameState, sector: DrumSector, input: String): Pair<Boolean, String> {
         println("MoveProcessor: Phase 2 - Processing Guess. Input: '$input', Sector: $sector, Player: ${state.currentPlayerIndex}")
         val isLetterGuess = input.length == 1
         var message: String
-        var success: Boolean
+        var success = false
         var revealedWord = state.revealedWord
         var usedLetters = state.usedLetters
         var scoreChange = 0
-        // FIX 9: Инициализируем turnEnds в зависимости от типа угадывания
         var turnEnds: Boolean
         var isGameOver = false
 

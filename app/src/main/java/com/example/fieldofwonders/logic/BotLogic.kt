@@ -1,44 +1,45 @@
 package com.example.fieldofwonders.logic
 
 import com.example.fieldofwonders.data.GameState
-// import com.example.fieldofwonders.data.DrumSector // Больше не нужен
-// import com.example.fieldofwonders.logic.DrumManager // Больше не нужен
-// import com.example.fieldofwonders.logic.MoveProcessor // Больше не нужен
 import kotlin.random.Random
 
-// Убираем зависимости, если они не нужны для стратегии угадывания
 class BotLogic {
 
-    // Теперь не suspend и просто возвращает строку для угадывания
     fun makeBotMove(game: GameState): String {
         println("BotLogic: Generating guess for state: revealed='${game.revealedWord}', used=${game.usedLetters}")
-        // Простейшая логика выбора буквы (без учета частотности и т.д.)
         val alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
         val availableLetters = alphabet.filter { it !in game.usedLetters }
 
-        // Улучшенная логика угадывания слова (шанс зависит от открытых букв)
-        val revealedCount = game.revealedWord.count { it != '*' }
-        val wordLength = game.currentWord.text.length
+        val canTryGuessWord = game.moveCount >= 4 // Разрешаем угадывать слово начиная с 5-го хода (индекс 4)
+
+        var shouldGuessWord = false
+        if (canTryGuessWord) {
+            val revealedCount = game.revealedWord.count { it != '*' }
+            val wordLength = game.currentWord.text.length
+
         val chanceToGuessWord = when {
-            revealedCount >= wordLength - 1 -> 0.8f // Почти угадано, большой шанс
-            revealedCount > wordLength / 2 -> 0.3f  // Больше половины открыто
-            revealedCount > 2 -> 0.1f             // Хотя бы несколько букв
-            else -> 0.0f                          // Мало букв, не рискуем
+            revealedCount >= wordLength - 1 -> 0.5f
+            revealedCount >= wordLength - 2 && wordLength > 5 -> 0.2f
+            revealedCount > wordLength * 0.6 -> 0.1f
+            revealedCount > wordLength * 0.4 && revealedCount > 2 -> 0.05f
+            else -> 0.0f
         }
 
-        val shouldGuessWord = Random.nextFloat() < chanceToGuessWord
-        println("BotLogic: Chance to guess word = $chanceToGuessWord, Rolled = ${Random.nextFloat()}, ShouldGuessWord = $shouldGuessWord")
-
+            val randomRoll = Random.nextFloat()
+            shouldGuessWord = randomRoll < chanceToGuessWord
+            println("BotLogic: Word guess check (move ${game.moveCount+1}): CanTry=$canTryGuessWord, Revealed=$revealedCount/$wordLength, Chance=$chanceToGuessWord, Roll=$randomRoll, ShouldGuess=$shouldGuessWord")
+        } else {
+            println("BotLogic: Word guess check (move ${game.moveCount+1}): Cannot try yet (moveCount < 4).")
+        }
 
         return if (shouldGuessWord) {
             println("BotLogic: Decided to guess the word.")
-            game.currentWord.text // Пытаемся угадать слово
+            game.currentWord.text
         } else if (availableLetters.isNotEmpty()) {
             val guess = availableLetters.random()
             println("BotLogic: Decided to guess letter '$guess'. Available: $availableLetters")
-            guess.toString() // Угадываем случайную доступную букву
+            guess.toString()
         } else {
-            // Если доступных букв нет (очень странно, но возможно), пытаемся угадать слово
             println("BotLogic: No available letters left, forced to guess word.")
             game.currentWord.text
         }

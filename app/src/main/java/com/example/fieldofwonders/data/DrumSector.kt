@@ -15,3 +15,11 @@ sealed class DrumSector {
         Bankrupt -> "Банкрот"
     }
 }
+
+fun DrumSector.toDisplayString(): String = when (this) {
+    is DrumSector.Points -> "${this.value} очков"
+    DrumSector.Double -> "Удвоение"
+    DrumSector.Zero -> "Ноль"
+    DrumSector.Plus -> "Плюс"
+    DrumSector.Bankrupt -> "Банкрот"
+}

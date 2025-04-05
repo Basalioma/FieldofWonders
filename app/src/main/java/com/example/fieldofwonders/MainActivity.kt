@@ -144,10 +144,10 @@ fun PoleChudesApp(gameViewModel: GameViewModel = viewModel()) {
             "game" -> {
                 val currentGameState = gameState
                 if (currentGameState == null) {
-                    println("Error: GameState is null on GameScreen!")
-                    LaunchedEffect(Unit) { screenState = "start" }
-                    LoadingScreen()
-                } else if (!currentGameState.isGameOver || showFinalRevealAnimation) { // Показываем игру, пока идет анимация
+                    println("GameScreen State: gameState is null, showing GenericLoadingScreen while waiting...")
+                    GenericLoadingScreen()
+                } else if (!currentGameState.isGameOver/* || showFinalRevealAnimation*/) { // Показываем игру, пока идет анимация
+                    println("GameScreen State: gameState is ready, showing GameScreen.")
                     GameScreen(
                         gameState = currentGameState,
                         message = message,
@@ -157,7 +157,8 @@ fun PoleChudesApp(gameViewModel: GameViewModel = viewModel()) {
                         onGuess = { input -> gameViewModel.makeGuess(input) }
                     )
                 } else {
-                    LoadingScreen() // Показываем заглушку, пока идет переход на EndScreen
+                    println("GameScreen State: gameState indicates game over, showing GenericLoadingScreen during transition.")
+                    GenericLoadingScreen()
                 }
             }
             "end" -> {
@@ -179,7 +180,7 @@ fun PoleChudesApp(gameViewModel: GameViewModel = viewModel()) {
                     println("EndScreen: Invalid state detected. Navigating to start.")
                     showFinalRevealAnimation = false
                     LaunchedEffect(Unit) { screenState = "start" }
-                    LoadingScreen()
+                    GenericLoadingScreen()
                 }
             }
 
@@ -196,7 +197,7 @@ fun PoleChudesApp(gameViewModel: GameViewModel = viewModel()) {
             else -> {
                 println("Error: Unknown screen state '$screenState'")
                 LaunchedEffect(Unit) { screenState = "start" }
-                LoadingScreen()
+                GenericLoadingScreen()
             }
 
         }

@@ -1,37 +1,40 @@
 package com.example.fieldofwonders.logic
 
-import android.app.Application // Используем Application Context
-import androidx.lifecycle.AndroidViewModel // Наследуемся от AndroidViewModel для доступа к Context
+import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fieldofwonders.data.DrumSector
 import com.example.fieldofwonders.data.GameState
+import com.example.fieldofwonders.data.Word
 import com.example.fieldofwonders.settings.GameSettings
 import com.example.fieldofwonders.settings.SoundManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
-
-// Наследуемся от AndroidViewModel для получения Application Context
 class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Менеджеры и Логика ---
-    // Получаем applicationContext из AndroidViewModel
     private val appContext = application.applicationContext
 
     private val wordLoader = WordLoader(appContext)
-    val gameStateManager = GameStateManager(wordLoader)
-    val drumManager = DrumManager()
+    private val gameStateManager = GameStateManager()
+    private val drumManager = DrumManager()
     private val moveProcessor = MoveProcessor(gameStateManager)
     private val botLogic = BotLogic()
 
-    val gameSettings = GameSettings(appContext)
+    private val gameSettings = GameSettings(appContext)
     private val soundManager = SoundManager(appContext, gameSettings)
 
+    // SharedPreferences для состояния пула вопросов
+    private val wordPoolPrefs = appContext.getSharedPreferences("word_pool_state", Context.MODE_PRIVATE)
 
     // --- Состояние для UI ---
     val gameState: StateFlow<GameState?> = gameStateManager.gameState
@@ -50,25 +53,160 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
 
+    // --- Внутреннее состояние пула вопросов ---
+    private var allWords: List<Word> = emptyList() // Мастер-лист слов
+    private var currentWordVersion: Int = 0        // Версия загруженного списка слов
+    private var currentShuffledIndices: MutableList<Int> = mutableListOf() // Текущий порядок индексов
+    private var usedIndicesSet: MutableSet<Int> = mutableSetOf() // Использованные индексы в текущем цикле
+
+    companion object {
+        private const val PREF_POOL_VERSION = "pool_word_version"
+        private const val PREF_USED_INDICES = "pool_used_indices"
+        private const val PREF_SHUFFLED_ORDER = "pool_shuffled_order" // Ключ для сохранения порядка
+    }
+
     // --- Инициализация ---
     init {
         viewModelScope.launch {
-            println("GameViewModel: Loading words...")
-            gameStateManager.loadWords()
-            println("GameViewModel: Words loaded.")
-            _isReady.value = true // Устанавливаем флаг готовности
+            loadAndPrepareWordPool() // Загружаем слова и состояние пула
+            _isReady.value = true // Устанавливаем готовность ПОСЛЕ подготовки пула
             println("GameViewModel: Set isReady = true")
-            playBackgroundMusic() // Запускаем музыку после загрузки
+            playBackgroundMusic()
         }
-        observeBotTurn()
+        observeBotTurn() // Запускаем наблюдатель за ходом бота
+    }
+
+    // Загрузка слов и восстановление/инициализация состояния пула
+    private suspend fun loadAndPrepareWordPool() {
+        println("GameViewModel: Loading words and preparing pool...")
+        val wordData = wordLoader.loadWords() // Получаем слова и версию
+        allWords = wordData.words
+        currentWordVersion = wordData.version
+        println("GameViewModel: Loaded ${allWords.size} words, version $currentWordVersion.")
+
+        if (allWords.isEmpty()) {
+            println("GameViewModel ERROR: Word list is empty! Cannot prepare pool.")
+            _message.value = "Ошибка: не удалось загрузить слова для игры."
+            // Устанавливаем готовность, но играть будет нельзя
+            _isReady.value = true
+            return // Выходим, если слов нет
+        }
+
+        // Загружаем сохраненное состояние пула
+        val savedVersion = wordPoolPrefs.getInt(PREF_POOL_VERSION, -1)
+        val savedUsedIndicesStrings = wordPoolPrefs.getStringSet(PREF_USED_INDICES, emptySet()) ?: emptySet()
+        val savedShuffledOrderString = wordPoolPrefs.getString(PREF_SHUFFLED_ORDER, null)
+
+        println("GameViewModel: Loaded saved pool state - Version: $savedVersion, Used count: ${savedUsedIndicesStrings.size}, Has saved order: ${savedShuffledOrderString != null}")
+
+        // Проверяем версию
+        if (currentWordVersion == savedVersion && savedShuffledOrderString != null) {
+            // Версия совпадает и есть сохраненный порядок - восстанавливаем
+            println("GameViewModel: Word version matches saved state. Restoring pool...")
+            usedIndicesSet = savedUsedIndicesStrings.mapNotNull { it.toIntOrNull() }.toMutableSet()
+            currentShuffledIndices = savedShuffledOrderString.split(',')
+                .mapNotNull { it.toIntOrNull() }
+                .toMutableList()
+
+            // Проверка консистентности (на всякий случай)
+            if (currentShuffledIndices.size != allWords.size || usedIndicesSet.any { it >= allWords.size }) {
+                println("GameViewModel WARN: Saved pool state inconsistent. Resetting pool.")
+                resetWordPool() // Сбрасываем, если что-то не так
+            } else {
+                println("GameViewModel: Pool restored. Used indices: ${usedIndicesSet.size}/${currentShuffledIndices.size}")
+            }
+
+        } else {
+            // Версия не совпадает или нет сохраненного состояния - создаем новый пул
+            if (currentWordVersion != savedVersion) {
+                println("GameViewModel: Word version mismatch (current: $currentWordVersion, saved: $savedVersion). Resetting pool.")
+            } else {
+                println("GameViewModel: No saved shuffled order found. Resetting pool.")
+            }
+            resetWordPool()
+        }
+    }
+
+    // Создает новый перемешанный пул и сбрасывает использованные индексы
+    private fun resetWordPool() {
+        if (allWords.isEmpty()) return // Нечего сбрасывать
+
+        println("GameViewModel: Resetting and shuffling word pool...")
+        currentShuffledIndices = allWords.indices.toMutableList() // Список индексов [0, 1, 2, ...]
+        currentShuffledIndices.shuffle() // Перемешиваем
+        usedIndicesSet.clear() // Очищаем использованные
+
+        // Сохраняем новое состояние
+        saveWordPoolState()
+        println("GameViewModel: New pool created. Order: ${currentShuffledIndices.take(5)}... Used: ${usedIndicesSet.size}")
+    }
+
+    // Сохраняет текущее состояние пула в SharedPreferences
+    private fun saveWordPoolState() {
+        if (allWords.isEmpty()) return // Не сохраняем, если нет слов
+
+        val usedIndicesStrings = usedIndicesSet.map { it.toString() }.toSet()
+        val shuffledOrderString = currentShuffledIndices.joinToString(",")
+
+        wordPoolPrefs.edit {
+            putInt(PREF_POOL_VERSION, currentWordVersion)
+            putStringSet(PREF_USED_INDICES, usedIndicesStrings)
+            putString(PREF_SHUFFLED_ORDER, shuffledOrderString)
+            apply() // Сохраняем асинхронно
+        }
+    }
+
+    // Получает следующее неиспользованное слово
+    private suspend fun getNextWord(): Word? = withContext(Dispatchers.Default) { // Выносим поиск в фоновый поток
+        if (allWords.isEmpty()) {
+            println("GameViewModel ERROR: Cannot get next word, word list is empty.")
+            return@withContext null
+        }
+
+        // Ищем первый неиспользованный индекс в текущем порядке
+        var nextIndex: Int? = null
+        for (index in currentShuffledIndices) {
+            if (!usedIndicesSet.contains(index)) {
+                nextIndex = index
+                break
+            }
+        }
+
+        // Если не нашли (цикл закончился)
+        if (nextIndex == null) {
+            println("GameViewModel: Word pool cycle complete. Resetting pool...")
+            resetWordPool() // Перемешиваем заново
+            // Берем первый индекс из нового пула
+            nextIndex = currentShuffledIndices.firstOrNull() // Должен быть не null, если allWords не пуст
+        }
+
+        if (nextIndex != null) {
+            println("GameViewModel: Next word index selected: $nextIndex")
+            usedIndicesSet.add(nextIndex) // Помечаем как использованный
+            saveWordPoolState() // Сохраняем обновленный список использованных
+            return@withContext allWords.getOrNull(nextIndex) // Возвращаем слово
+        } else {
+            println("GameViewModel ERROR: Could not determine next word index even after reset.")
+            return@withContext null // Не должно произойти, если allWords не пуст
+        }
     }
 
     // --- Действия Игрока (вызываются из UI) ---
     fun startGame(playerNames: List<String>) {
-        _message.value = ""
-        _isBotActing.value = false
-        gameStateManager.startGame(playerNames)
-        playBackgroundMusic() // Запускаем музыку при старте игры
+        viewModelScope.launch { // Запускаем в корутине, т.к. getNextWord - suspend
+            _message.value = ""
+            _isBotActing.value = false
+            val nextWord = getNextWord() // Получаем следующее слово
+            if (nextWord != null) {
+                gameStateManager.startGameWithWord(playerNames, nextWord) // Нужен новый метод в GameStateManager
+                println("GameViewModel: Starting game with word: ${nextWord.text}")
+                playBackgroundMusic()
+            } else {
+                _message.value = "Не удалось выбрать слово для игры!"
+                println("GameViewModel ERROR: Failed to get a word to start the game.")
+                // Что делать в этом случае? Возможно, показать ошибку и не переходить на экран игры.
+            }
+        }
     }
 
     fun requestSpin() {
@@ -80,7 +218,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val (spinSuccess, msg) = moveProcessor.makeMove(sector, "")
             _message.value = msg
             // Решаем, проигрывать ли звук для сектора (например, если Банкрот)
-            if (sector is DrumSector.Bankrupt || sector is DrumSector.Zero /* || !spinSuccess */ ) {
+            if (sector is DrumSector.Bankrupt || sector is DrumSector.Zero || !spinSuccess) {
                 playSoundEffect(false) // Звук ошибки/пропуска хода
             } else {
                 // Можно добавить звук вращения или успеха сектора
@@ -114,10 +252,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resetGame() {
-        pauseBackgroundMusic() // Останавливаем музыку перед сбросом
+        pauseBackgroundMusic()
         gameStateManager.resetGame()
         _message.value = ""
         _isBotActing.value = false
+        println("GameViewModel: Game state reset. Word pool state remains.")
     }
 
     // --- Управление звуком и настройками (вызывается из UI) ---
@@ -239,7 +378,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                         println("ViewModel Bot Turn CYCLE: Processing spin result...")
                         val (spinSuccess, spinMsg) = moveProcessor.makeMove(sector, "")
-                        _message.value = spinMsg
+                        //_message.value = spinMsg
                         actionSuccess = spinSuccess
                         println("ViewModel Bot Turn CYCLE: Spin processed. actionSuccess=$actionSuccess, Message: '$spinMsg'")
                         if (sector is DrumSector.Bankrupt || sector is DrumSector.Zero || !actionSuccess) {
