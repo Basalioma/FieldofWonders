@@ -26,21 +26,21 @@ import androidx.lifecycle.Lifecycle
 import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            FieldOfWondersTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // Передаем applicationContext в ViewModel factory (если нужно)
-                    // val context = LocalContext.current.applicationContext
-                    PoleChudesApp(/* viewModel = viewModel(factory = ...) */) // Можно и без factory, если конструктор ViewModel простой
-                }
+   override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+         FieldOfWondersTheme {
+            Surface(
+               modifier = Modifier.fillMaxSize(),
+               color = MaterialTheme.colorScheme.background
+            ) {
+               // Передаем applicationContext в ViewModel factory (если нужно)
+               // val context = LocalContext.current.applicationContext
+               PoleChudesApp(/* viewModel = viewModel(factory = ...) */) // Можно и без factory, если конструктор ViewModel простой
             }
-        }
-    }
+         }
+      }
+   }
 }
 
 @Composable
