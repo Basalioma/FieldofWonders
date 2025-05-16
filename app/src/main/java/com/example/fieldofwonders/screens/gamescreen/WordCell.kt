@@ -24,65 +24,65 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun WordCell(
-    modifier: Modifier = Modifier,
-    letter: Char, // Буква ('А') или заглушка ('*')
-    isInitiallyHidden: Boolean, // Была ли ячейка скрыта изначально ('*')
-    triggerFinalReveal: Boolean, // Флаг для финального показа
-    index: Int, // Индекс для задержки анимации
-    cellSize: Dp,
-    fontSize: TextUnit
+   modifier: Modifier = Modifier,
+   letter: Char, // Буква ('А') или заглушка ('*')
+   isInitiallyHidden: Boolean, // Была ли ячейка скрыта изначально ('*')
+   triggerFinalReveal: Boolean, // Флаг для финального показа
+   index: Int, // Индекс для задержки анимации
+   cellSize: Dp,
+   fontSize: TextUnit
 ) {
-    // Определяем, должна ли ячейка быть показана СЕЙЧАС
-    val shouldBeRevealed = !isInitiallyHidden || (isInitiallyHidden && triggerFinalReveal)
+   // Определяем, должна ли ячейка быть показана СЕЙЧАС
+   val shouldBeRevealed = !isInitiallyHidden || (isInitiallyHidden && triggerFinalReveal)
 
-    // Анимация вращения
-    val rotation by animateFloatAsState(
-        targetValue = if (shouldBeRevealed) 180f else 0f,
-        animationSpec = tween(
-            durationMillis = 600,
-            // Задержка только для финального открытия, чтобы было красиво
-            delayMillis = if (triggerFinalReveal && isInitiallyHidden) index * 60 else 0
-        ),
-        label = "FlipRotation"
-    )
+   // Анимация вращения
+   val rotation by animateFloatAsState(
+      targetValue = if (shouldBeRevealed) 180f else 0f,
+      animationSpec = tween(
+         durationMillis = 600,
+         // Задержка только для финального открытия, чтобы было красиво
+         delayMillis = if (triggerFinalReveal && isInitiallyHidden) index * 60 else 0
+      ),
+      label = "FlipRotation"
+   )
 
-    val density = LocalDensity.current.density
+   val density = LocalDensity.current.density
 
-    Card(
-        modifier = modifier.size(cellSize)
-            .size(cellSize)
-            .graphicsLayer {
-                rotationY = rotation
-                cameraDistance = 8f * density
-            },
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(
-            containerColor = if (rotation <= 90f)
-                MaterialTheme.colorScheme.surfaceBright // Цвет "закрытой"
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow // Цвет "открытой"
-        )
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            val textToShow = if (rotation <= 90f) "" else letter.toString().uppercase()
-            val textColor = if (rotation <= 90f) Color.Transparent else MaterialTheme.colorScheme.onSurface
+   Card(
+      modifier = modifier.size(cellSize)
+         .size(cellSize)
+         .graphicsLayer {
+            rotationY = rotation
+            cameraDistance = 8f * density
+         },
+      shape = MaterialTheme.shapes.medium,
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+      colors = CardDefaults.cardColors(
+         containerColor = if (rotation <= 90f)
+            MaterialTheme.colorScheme.surfaceBright // Цвет "закрытой"
+         else
+            MaterialTheme.colorScheme.surfaceContainerLow // Цвет "открытой"
+      )
+   ) {
+      Box(
+         contentAlignment = Alignment.Center,
+         modifier = Modifier.fillMaxSize()
+      ) {
+         val textToShow = if (rotation <= 90f) "" else letter.toString().uppercase()
+         val textColor = if (rotation <= 90f) Color.Transparent else MaterialTheme.colorScheme.onSurface
 
-            Text(
-                text = textToShow,
-                fontSize = fontSize,
-                fontWeight = FontWeight.Bold,
-                color = textColor,
-                modifier = Modifier.graphicsLayer {
-                    if (rotation > 90f) {
-                        scaleX = -1f
-                    }
-                }
-            )
-        }
-    }
+         Text(
+            text = textToShow,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Bold,
+            color = textColor,
+            modifier = Modifier.graphicsLayer {
+               if (rotation > 90f) {
+                  scaleX = -1f
+               }
+            }
+         )
+      }
+   }
 }

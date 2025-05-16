@@ -13,67 +13,67 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun StartScreen(
-    onStart: (List<String>) -> Unit,
-    onSettings: () -> Unit,
-    onRules: () -> Unit
+   onStart: (List<String>) -> Unit,
+   onSettings: () -> Unit,
+   onRules: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "ПОЛЕ ЧУДЕС",
-                fontSize = 36.sp,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(32.dp))
+   Box(
+      modifier = Modifier
+         .fillMaxSize()
+         .padding(16.dp)
+   ) {
+      Column(
+         modifier = Modifier.align(Alignment.Center),
+         horizontalAlignment = Alignment.CenterHorizontally
+      ) {
+         Text(
+            text = "ПОЛЕ ЧУДЕС",
+            fontSize = 36.sp,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center
+         )
+         Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = { onStart(listOf("Игрок 1")) },
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(56.dp)
-            ) {
-                Text("Начать игру", fontSize = 18.sp)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onRules,
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(56.dp)
-            ) {
-                Text("Правила игры", fontSize = 18.sp)
-            }
-        }
-
-        IconButton(
-            onClick = onSettings,
+         Button(
+            onClick = { onStart(listOf("Игрок 1")) },
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 16.dp)
-                .size(48.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "Настройки",
-                tint = MaterialTheme.colorScheme.onBackground
-            )
-        }
-
-        Text(
-            text = "v 1.1.1",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+               .fillMaxWidth(0.7f)
+               .height(56.dp)
+         ) {
+            Text("Начать игру", fontSize = 18.sp)
+         }
+         Spacer(modifier = Modifier.height(16.dp))
+         OutlinedButton(
+            onClick = onRules,
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(bottom = 8.dp)
-        )
-    }
+               .fillMaxWidth(0.7f)
+               .height(56.dp)
+         ) {
+            Text("Правила игры", fontSize = 18.sp)
+         }
+      }
+
+      IconButton(
+         onClick = onSettings,
+         modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 16.dp)
+            .size(48.dp)
+      ) {
+         Icon(
+            imageVector = Icons.Default.Settings,
+            contentDescription = "Настройки",
+            tint = MaterialTheme.colorScheme.onBackground
+         )
+      }
+
+      Text(
+         text = "v 1.1.1",
+         fontSize = 14.sp,
+         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+         modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(bottom = 8.dp)
+      )
+   }
 }

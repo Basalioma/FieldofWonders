@@ -12,11 +12,11 @@ import com.example.fieldofwonders.data.GameState
 
 @Composable
 fun PlayerInfo(gameState: GameState) {
-    Column {
-        Text(
-            text = "Текущий игрок: ${gameState.players[gameState.currentPlayerIndex].name}",
-            fontSize = 18.sp
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-    }
+   Column {
+      Text(
+         text = "Текущий игрок: ${gameState.players[gameState.currentPlayerIndex].name}",
+         fontSize = 18.sp
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+   }
 }

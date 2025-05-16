@@ -12,14 +12,14 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun GenericLoadingScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(50.dp),
-            color = MaterialTheme.colorScheme.primary,
-            strokeWidth = 4.dp
-        )
-    }
+   Box(
+      modifier = Modifier.fillMaxSize(),
+      contentAlignment = Alignment.Center
+   ) {
+      CircularProgressIndicator(
+         modifier = Modifier.size(50.dp),
+         color = MaterialTheme.colorScheme.primary,
+         strokeWidth = 4.dp
+      )
+   }
 }

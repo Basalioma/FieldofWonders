@@ -14,44 +14,44 @@ import com.example.fieldofwonders.data.GameState
 
 @Composable
 fun GameScreen(
-    gameState: GameState,
-    message: String,
-    isBotActing: Boolean, // Добавляем флаг
-    triggerFinalReveal: Boolean,
-    onSpinRequest: () -> Unit, // Добавляем колбэк
-    onGuess: (String) -> Unit // Оставляем колбэк
+   gameState: GameState,
+   message: String,
+   isBotActing: Boolean, // Добавляем флаг
+   triggerFinalReveal: Boolean,
+   onSpinRequest: () -> Unit, // Добавляем колбэк
+   onGuess: (String) -> Unit // Оставляем колбэк
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        PlayerInfo(gameState)
-        Leaderboard(gameState)
-        WordDisplay(
-            gameState = gameState,
-            triggerFinalReveal = triggerFinalReveal
-        )
+   Column(
+      modifier = Modifier.fillMaxSize().padding(16.dp),
+      horizontalAlignment = Alignment.CenterHorizontally
+   ) {
+      PlayerInfo(gameState)
+      Leaderboard(gameState)
+      WordDisplay(
+         gameState = gameState,
+         triggerFinalReveal = triggerFinalReveal
+      )
 
-        // Отображаем сообщение от игры
-        if (message.isNotEmpty()) {
-            Text(text = message, modifier = Modifier.padding(vertical = 8.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+      // Отображаем сообщение от игры
+      if (message.isNotEmpty()) {
+         Text(text = message, modifier = Modifier.padding(vertical = 8.dp))
+         Spacer(modifier = Modifier.height(8.dp))
+      }
 
-        // Барабан теперь принимает onSpinRequest и флаг isBotActing
-        DrumSpinner(
-            gameState = gameState,
-            isBotActing = isBotActing,
-            onSpinRequest = onSpinRequest
-        )
+      // Барабан теперь принимает onSpinRequest и флаг isBotActing
+      DrumSpinner(
+         gameState = gameState,
+         isBotActing = isBotActing,
+         onSpinRequest = onSpinRequest
+      )
 
-        Spacer(modifier = Modifier.height(16.dp)) // Пространство перед клавиатурой
+      Spacer(modifier = Modifier.height(16.dp)) // Пространство перед клавиатурой
 
-        // Клавиатура принимает onGuess и флаг isBotActing
-        KeyboardInput(
-            gameState = gameState,
-            isPlayerTurn = !gameState.players[gameState.currentPlayerIndex].isBot && !isBotActing, // Определяем, ход ли игрока
-            onGuess = onGuess
-        )
-    }
+      // Клавиатура принимает onGuess и флаг isBotActing
+      KeyboardInput(
+         gameState = gameState,
+         isPlayerTurn = !gameState.players[gameState.currentPlayerIndex].isBot && !isBotActing, // Определяем, ход ли игрока
+         onGuess = onGuess
+      )
+   }
 }

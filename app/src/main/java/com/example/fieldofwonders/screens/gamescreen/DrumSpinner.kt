@@ -22,48 +22,48 @@ import com.example.fieldofwonders.data.GameState
 
 @Composable
 fun DrumSpinner(
-    gameState: GameState,
-    isBotActing: Boolean, // Получаем флаг снаружи
-    onSpinRequest: () -> Unit // Получаем колбэк для запроса вращения
+   gameState: GameState,
+   isBotActing: Boolean, // Получаем флаг снаружи
+   onSpinRequest: () -> Unit // Получаем колбэк для запроса вращения
 ) {
-    val currentPlayer = gameState.players[gameState.currentPlayerIndex]
-    val canPlayerSpin = !currentPlayer.isBot && gameState.lastSector == null && !isBotActing
-    val showWaitingForGuess = !currentPlayer.isBot && gameState.lastSector != null && !isBotActing
+   val currentPlayer = gameState.players[gameState.currentPlayerIndex]
+   val canPlayerSpin = !currentPlayer.isBot && gameState.lastSector == null && !isBotActing
+   val showWaitingForGuess = !currentPlayer.isBot && gameState.lastSector != null && !isBotActing
 
-    println("DrumSpinner Render: isBot=${currentPlayer.isBot}, isBotActing=$isBotActing, canPlayerSpin=$canPlayerSpin, showWaitingForGuess=$showWaitingForGuess, lastSector=${gameState.lastSector}")
+   println("DrumSpinner Render: isBot=${currentPlayer.isBot}, isBotActing=$isBotActing, canPlayerSpin=$canPlayerSpin, showWaitingForGuess=$showWaitingForGuess, lastSector=${gameState.lastSector}")
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Отображение выпавшего сектора, если он есть
-        gameState.lastSector?.let {
-            Text("Выпал сектор: $it", fontSize = 18.sp)
+   Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      // Отображение выпавшего сектора, если он есть
+      gameState.lastSector?.let {
+         Text("Выпал сектор: $it", fontSize = 18.sp)
+         Spacer(modifier = Modifier.height(8.dp))
+      }
+
+      when {
+         // Если ход игрока и он может крутить
+         canPlayerSpin -> {
+            Button(
+               onClick = onSpinRequest, // Вызываем колбэк
+               modifier = Modifier.fillMaxWidth(0.7f)
+            ) {
+               Text("Крутить барабан")
+            }
+         }
+         // Если ход игрока, но он должен угадывать
+         showWaitingForGuess -> {
+            Text("Выберите букву или назовите слово", fontSize = 16.sp)
+         }
+         // Если ход бота или бот сейчас действует
+         currentPlayer.isBot || isBotActing -> {
+            Text("Ход Бота...", fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        when {
-            // Если ход игрока и он может крутить
-            canPlayerSpin -> {
-                Button(
-                    onClick = onSpinRequest, // Вызываем колбэк
-                    modifier = Modifier.fillMaxWidth(0.7f)
-                ) {
-                    Text("Крутить барабан")
-                }
-            }
-            // Если ход игрока, но он должен угадывать
-            showWaitingForGuess -> {
-                Text("Выберите букву или назовите слово", fontSize = 16.sp)
-            }
-            // Если ход бота или бот сейчас действует
-            currentPlayer.isBot || isBotActing -> {
-                Text("Ход Бота...", fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                CircularProgressIndicator() // Показываем индикатор активности
-            }
-            // Другие состояния (например, конец игры, хотя GameScreen не должен рендериться)
-            else -> {
-                Text("Ожидание...", fontSize = 16.sp) // Запасной вариант
-            }
-        }
-    }
-    Spacer(modifier = Modifier.height(16.dp)) // Отступ снизу
+            CircularProgressIndicator() // Показываем индикатор активности
+         }
+         // Другие состояния (например, конец игры, хотя GameScreen не должен рендериться)
+         else -> {
+            Text("Ожидание...", fontSize = 16.sp) // Запасной вариант
+         }
+      }
+   }
+   Spacer(modifier = Modifier.height(16.dp)) // Отступ снизу
 }
