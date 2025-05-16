@@ -128,27 +128,20 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
             println("MoveProcessor: Phase 2 - Letter incorrect/used, turn ends (turnEnds=true).")
          }
       } else {
-         // Угадывание слова
          val (wordSuccess, wordMessage) = guessHandler.guessWord(input, state)
          success = wordSuccess
-         message = wordMessage
-         turnEnds = true // Ход всегда заканчивается после попытки угадать слово
+         turnEnds = true
 
          if (success) {
             println("MoveProcessor: Phase 2 - Word '$input' correct! Game Over.")
             revealedWord = state.currentWord.text
             isGameOver = true
-            // FIX 10: Передаем state в calculateScore (даже если openedCount=0)
-            // Очки за слово = очки сектора (или фиксированная сумма?)
-            scoreChange = calculateScore(state, sector, 0) // Передаем 0, т.к. не открываем букву
-            // Добавим бонус за угаданное слово, если нужно
-            if (scoreChange == 0 && sector !is DrumSector.Bankrupt && sector !is DrumSector.Zero) scoreChange = 500 // Бонус, если сектор был не очковый
-            message = "Правильно! $message. Вы заработали $scoreChange очков."
-            println("MoveProcessor: Phase 2 - Word correct, turn ends, game over.")
+            scoreChange = 1000
+            message = "Правильно! Слово угадано! Вы заработали $scoreChange очков."
+            println("MoveProcessor: Phase 2 - Word correct, +$scoreChange points, turn ends, game over.")
          } else {
             println("MoveProcessor: Phase 2 - Word '$input' incorrect.")
-            message = "$message. Переход хода."
-            // Очки не меняются, ход переходит
+            message = "$wordMessage. Переход хода."
             println("MoveProcessor: Phase 2 - Word incorrect, turn ends.")
          }
       }
