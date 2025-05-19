@@ -3,6 +3,7 @@ package com.example.fieldofwonders.screens.gamescreen
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -25,52 +26,66 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun WordCell(
    modifier: Modifier = Modifier,
-   letter: Char, // Буква ('А') или заглушка ('*')
-   isInitiallyHidden: Boolean, // Была ли ячейка скрыта изначально ('*')
-   triggerFinalReveal: Boolean, // Флаг для финального показа
-   index: Int, // Индекс для задержки анимации
+   letter: Char,
+   displayLetter: Char,
+   triggerFinalReveal: Boolean,
+   index: Int,
    cellSize: Dp,
-   fontSize: TextUnit
+   fontSize: TextUnit,
+   isPlusActionActive: Boolean,
+   onCellClick: (Char) -> Unit
 ) {
-   // Определяем, должна ли ячейка быть показана СЕЙЧАС
-   val shouldBeRevealed = !isInitiallyHidden || (isInitiallyHidden && triggerFinalReveal)
+   val density = LocalDensity.current.density
+   val cellIsCurrentlyHidden = displayLetter == '*'
+   val rotationTargetValue =
+   if (!cellIsCurrentlyHidden || (cellIsCurrentlyHidden && triggerFinalReveal)) 180f else 0f
 
-   // Анимация вращения
    val rotation by animateFloatAsState(
-      targetValue = if (shouldBeRevealed) 180f else 0f,
+      targetValue = rotationTargetValue,
       animationSpec = tween(
          durationMillis = 600,
-         // Задержка только для финального открытия, чтобы было красиво
-         delayMillis = if (triggerFinalReveal && isInitiallyHidden) index * 60 else 0
+         delayMillis = if (triggerFinalReveal && cellIsCurrentlyHidden) index * 60 else 0
       ),
       label = "FlipRotation"
    )
 
-   val density = LocalDensity.current.density
+   val clickableForPlus = isPlusActionActive && cellIsCurrentlyHidden
+
 
    Card(
-      modifier = modifier.size(cellSize)
+      modifier = modifier
          .size(cellSize)
          .graphicsLayer {
             rotationY = rotation
             cameraDistance = 8f * density
-         },
+         }
+         .then(
+            if (clickableForPlus) {
+               Modifier.clickable {
+                  onCellClick(letter)
+               }
+            } else Modifier
+         ),
       shape = MaterialTheme.shapes.medium,
       elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+      border = BorderStroke(
+         1.dp,
+         if (clickableForPlus) MaterialTheme.colorScheme.primary
+         else MaterialTheme.colorScheme.outlineVariant
+      ),
       colors = CardDefaults.cardColors(
-         containerColor = if (rotation <= 90f)
-            MaterialTheme.colorScheme.surfaceBright // Цвет "закрытой"
-         else
-            MaterialTheme.colorScheme.surfaceContainerLow // Цвет "открытой"
+         containerColor = if (rotation <= 90f) MaterialTheme.colorScheme.surfaceBright
+         else MaterialTheme.colorScheme.surfaceContainerLow
       )
    ) {
       Box(
          contentAlignment = Alignment.Center,
          modifier = Modifier.fillMaxSize()
       ) {
-         val textToShow = if (rotation <= 90f) "" else letter.toString().uppercase()
-         val textColor = if (rotation <= 90f) Color.Transparent else MaterialTheme.colorScheme.onSurface
+         val textToShow = if (rotation > 90f) displayLetter.toString().uppercase()
+                          else ""
+         val textColor = if (rotation > 90f) MaterialTheme.colorScheme.onSurface
+                         else Color.Transparent
 
          Text(
             text = textToShow,

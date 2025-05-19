@@ -15,12 +15,16 @@ import com.example.fieldofwonders.data.GameState
 fun Leaderboard(gameState: GameState) {
    Text(text = "Лидерборд:", fontSize = 18.sp)
    LazyColumn(modifier = Modifier.fillMaxWidth(0.7f).height(100.dp)) {
-      items(gameState.players.sortedByDescending { it.score }.size) { index ->
+      val sortedPlayers = gameState.players.sortedByDescending { it.score }
+      val currentPlayerId = gameState.players[gameState.currentPlayerIndex].id
+
+      items(sortedPlayers.size) { index ->
          val player = gameState.players.sortedByDescending { it.score }[index]
          Text(
             text = "${index + 1}. ${player.name}: ${player.score}",
             fontSize = 16.sp,
-            color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+            color =  if (index == currentPlayerId) MaterialTheme.colorScheme.primary
+                     else MaterialTheme.colorScheme.onBackground
          )
       }
    }

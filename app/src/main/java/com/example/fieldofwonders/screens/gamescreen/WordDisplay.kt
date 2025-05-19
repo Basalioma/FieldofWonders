@@ -7,16 +7,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-//import com.google.accompanist.flowlayout.FlowRow
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.fieldofwonders.data.GameState
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WordDisplay(gameState: GameState, triggerFinalReveal: Boolean) {
-   val word = gameState.currentWord.text // Берем полное слово для определения isInitiallyHidden
-   val revealedWord = gameState.revealedWord // Берем текущее открытое слово
+fun WordDisplay(gameState: GameState,
+                triggerFinalReveal: Boolean,
+                isPlusActionActive: Boolean,
+                onPlusCellClick: (Char) -> Unit
+               ) {
+   val wordOriginal = gameState.currentWord.text
+   val revealedWordCurrent = gameState.revealedWord
    val hint = gameState.currentWord.hint
 
    Column(
@@ -25,7 +28,6 @@ fun WordDisplay(gameState: GameState, triggerFinalReveal: Boolean) {
          .padding(vertical = 16.dp),
       horizontalAlignment = Alignment.CenterHorizontally
    ) {
-      // Отображение ячеек слова с автоматическим переносом
       FlowRow(
          modifier = Modifier
             .fillMaxWidth()
@@ -34,17 +36,20 @@ fun WordDisplay(gameState: GameState, triggerFinalReveal: Boolean) {
          verticalArrangement = Arrangement.spacedBy(6.dp),
          maxItemsInEachRow = 10
       ) {
-         word.forEachIndexed { index, letter ->
-            val displayLetter = revealedWord.getOrElse(index) { '*' }
-            val wasInitiallyHidden = displayLetter == '*'
+         wordOriginal.forEachIndexed { index, actualLetterInWord ->
+            val displayLetterToShow = revealedWordCurrent.getOrElse(index) { '*' }
 
             WordCell(
-               letter = letter,
-               isInitiallyHidden = wasInitiallyHidden,
+               letter = actualLetterInWord,
+               displayLetter = displayLetterToShow,
                triggerFinalReveal = triggerFinalReveal,
                index = index,
                cellSize = 36.dp,
                fontSize = 18.sp,
+               isPlusActionActive = isPlusActionActive,
+               onCellClick = { clickedLetter ->
+                  onPlusCellClick(clickedLetter)
+               }
             )
          }
       }

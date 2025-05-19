@@ -16,41 +16,49 @@ import com.example.fieldofwonders.data.GameState
 fun GameScreen(
    gameState: GameState,
    message: String,
-   isBotActing: Boolean, // Добавляем флаг
+   isBotActing: Boolean,
    triggerFinalReveal: Boolean,
-   onSpinRequest: () -> Unit, // Добавляем колбэк
-   onGuess: (String) -> Unit // Оставляем колбэк
+   onSpinRequest: () -> Unit,
+   onGuess: (String) -> Unit,
+   isPlusSectorActionActive: Boolean,
+   onPlusCellClick: (Char) -> Unit
 ) {
    Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
+      modifier = Modifier
+         .fillMaxSize()
+         .padding(16.dp),
       horizontalAlignment = Alignment.CenterHorizontally
    ) {
-      PlayerInfo(gameState)
+      //PlayerInfo(gameState)
+
+      val currentPlayerInGameState = gameState.players.getOrNull(gameState.currentPlayerIndex)
+      println("GameScreen: About to draw Leaderboard. For gameState.currentPlayerIndex=${gameState.currentPlayerIndex}, isBot=${currentPlayerInGameState?.isBot}, Name=${currentPlayerInGameState?.name}. isBotActing_VM=$isBotActing")
+
       Leaderboard(gameState)
       WordDisplay(
          gameState = gameState,
-         triggerFinalReveal = triggerFinalReveal
+         triggerFinalReveal = triggerFinalReveal,
+         isPlusActionActive = isPlusSectorActionActive,
+         onPlusCellClick = onPlusCellClick
       )
 
-      // Отображаем сообщение от игры
       if (message.isNotEmpty()) {
          Text(text = message, modifier = Modifier.padding(vertical = 8.dp))
          Spacer(modifier = Modifier.height(8.dp))
       }
 
-      // Барабан теперь принимает onSpinRequest и флаг isBotActing
       DrumSpinner(
          gameState = gameState,
          isBotActing = isBotActing,
          onSpinRequest = onSpinRequest
       )
 
-      Spacer(modifier = Modifier.height(16.dp)) // Пространство перед клавиатурой
+      Spacer(modifier = Modifier.height(16.dp))
 
-      // Клавиатура принимает onGuess и флаг isBotActing
       KeyboardInput(
          gameState = gameState,
-         isPlayerTurn = !gameState.players[gameState.currentPlayerIndex].isBot && !isBotActing, // Определяем, ход ли игрока
+         isPlayerTurnOverall = !gameState.players[gameState.currentPlayerIndex].isBot && !isBotActing,
+         isPlusSectorActionActive = isPlusSectorActionActive,
          onGuess = onGuess
       )
    }

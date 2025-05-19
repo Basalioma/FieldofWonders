@@ -40,14 +40,13 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
       }
    }
 
-   // Фаза 1: Обработка результата вращения барабана
    private fun processSpinResult(state: GameState, sector: DrumSector): Pair<Boolean, String> {
       println("MoveProcessor: Phase 1 - Processing Spin Result. Sector: $sector, Player: ${state.currentPlayerIndex}")
 
       var turnEnds = false
       var players = state.players
       var nextPlayerIndex = state.currentPlayerIndex
-      var newLastSector: DrumSector? = sector // Сохраняем сектор для возможного угадывания
+      var newLastSector: DrumSector? = sector
 
       when (sector) {
          is DrumSector.Bankrupt -> {
@@ -57,7 +56,6 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
          is DrumSector.Zero -> {
             turnEnds = true
          }
-         // Для Points, Plus, Double - turnEnds остается false по умолчанию
          is DrumSector.Plus, is DrumSector.Double, is DrumSector.Points -> {
             // Ничего дополнительно делать не нужно, ход продолжается
          }
@@ -65,7 +63,7 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
 
       if (turnEnds) {
          nextPlayerIndex = (state.currentPlayerIndex + 1) % state.players.size
-         newLastSector = null // Сбрасываем сектор при переходе хода
+         newLastSector = null
          println("MoveProcessor: Phase 1 - Turn ends due to sector. Next player: $nextPlayerIndex")
       } else {
          println("MoveProcessor: Phase 1 - Player continues turn. Sector $sector saved.")
@@ -78,14 +76,12 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
          moveCount = state.moveCount + 1
       )
       gameStateManager.updateState(newState)
-      // Успех = ход НЕ закончился (игрок может угадывать)
+
       return Pair(!turnEnds, "")
    }
 
-   // Фаза 2: Обработка угадывания буквы или слова
-   private fun processGuess(state: GameState, sector: DrumSector, input: String): Pair<Boolean, String> {
-      println("MoveProcessor: Phase 2 - Processing Guess. Input: '$input', Sector: $sector, Player: ${state.currentPlayerIndex}")
-      val isLetterGuess = input.length == 1
+   private fun processGuess(state: GameState, sectorForGuessInput: DrumSector, input: String): Pair<Boolean, String> {
+      println("MoveProcessor: Phase 2 - Processing Guess. Input: '$input', Sector: $sectorForGuessInput, Player: ${state.currentPlayerIndex}")
       var message: String
       var success = false
       var revealedWord = state.revealedWord
@@ -94,95 +90,123 @@ class MoveProcessor(private val gameStateManager: GameStateManager) {
       var turnEnds: Boolean
       var isGameOver = false
 
-      if (isLetterGuess) {
-         val letter = input.uppercase()[0]
-         val (guessSuccess, resultData) = guessHandler.guessLetter(letter, state)
-         success = guessSuccess
-         message = resultData.first
-         usedLetters = resultData.second
+      val isFullWordGuess = input.length > 1 || (input.length == 1 && state.currentWord.text.length == 1 && input.equals(state.currentWord.text, ignoreCase = true))
+
+      if (isFullWordGuess) {
+         val (wordSuccess, wordMessageResult) = guessHandler.guessWord(input, state)
+         success = wordSuccess
+         turnEnds = true
 
          if (success) {
-            val oldRevealed = revealedWord
-            // Обновляем revealedWord локально перед расчетом очков
+            println("MoveProcessor: Word '$input' correct! Game Over.")
+            revealedWord = state.currentWord.text
+            isGameOver = true
+            scoreChange = 1000
+            message = "Правильно! Слово угадано! Вы заработали $scoreChange очков."
+            println("MoveProcessor: Word correct, +$scoreChange points, turn ends, game over.")
+         } else {
+            println("MoveProcessor: Word '$input' incorrect.")
+            message = "${guessHandler.guessWord(input, state).second}. Переход хода."
+            println("MoveProcessor: Word incorrect, turn ends.")
+         }
+      } else {
+         val letter = input.uppercase()[0]
+
+         if (state.lastSector is DrumSector.Plus) {
+            println("MoveProcessor: Plus Sector Action. Revealing letter '$letter'. Player: ${state.currentPlayerIndex}")
+
+            val oldRevealedBeforePlus = state.revealedWord
             revealedWord = revealLetter(state.currentWord.text, state.revealedWord, letter)
-            val openedCount = revealedWord.count { it != '*' } - oldRevealed.count { it != '*' }
-            println("MoveProcessor: Phase 2 - Letter '$letter' correct. Opened $openedCount letters.")
-            // FIX 10: Передаем state в calculateScore
-            scoreChange = calculateScore(state, sector, openedCount)
-            message = "Буква '$letter' есть! Вы заработали $scoreChange очков."
-            // FIX 11: Игрок крутит снова, если угадал букву (правило игры)
-            turnEnds = false
-            message += " Крутите барабан!"
-            println("MoveProcessor: Phase 2 - Letter correct, player continues turn (turnEnds=false).")
-            // Проверяем, не открыли ли мы последнюю букву
-            if (!revealedWord.contains('*')) {
-               println("MoveProcessor: Phase 2 - Last letter revealed! Game Over.")
-               message += " И это последняя буква! Слово угадано!"
-               isGameOver = true
-               turnEnds = true // Игра закончена, ход не продолжается
+            success = revealedWord != oldRevealedBeforePlus || (state.currentWord.text.equals(letter.toString(), ignoreCase = true) && oldRevealedBeforePlus.contains('*'))
+
+
+            if (success) {
+               usedLetters = state.usedLetters + letter
+               scoreChange = 0
+               message = "Буква '$letter' открыта по сектору Плюс! Крутите барабан."
+               turnEnds = false
+               println("MoveProcessor: Plus Sector - Revealed '$letter'. RevealedWord: $revealedWord. UsedLetters: $usedLetters.")
+
+               if (!revealedWord.contains('*')) {
+                  println("MoveProcessor: Plus Sector - Last letter revealed via Plus! Game Over.")
+                  isGameOver = true
+                  turnEnds = true
+               }
+            } else {
+               println("MoveProcessor: Plus Sector - WARNING - Letter '$letter' did not change revealedWord or was already fully revealed.")
+               message = "Не удалось открыть букву '$letter' по сектору Плюс (возможно, уже открыта или ошибка). Крутите барабан." // Игрок все равно крутит дальше
+               turnEnds = false // Даже если что-то пошло не так с выбором, ход не должен перейти просто так
             }
 
          } else {
-            message = "Буква '$letter'. $message. Переход хода."
-            turnEnds = true // Не угадал или повтор - ход переходит
-            println("MoveProcessor: Phase 2 - Letter incorrect/used, turn ends (turnEnds=true).")
-         }
-      } else {
-         // Угадывание слова
-         val (wordSuccess, wordMessage) = guessHandler.guessWord(input, state)
-         success = wordSuccess
-         message = wordMessage
-         turnEnds = true // Ход всегда заканчивается после попытки угадать слово
+            println("MoveProcessor: Normal Letter Guess. Letter '$letter'.")
+            val (guessSuccess, resultData) = guessHandler.guessLetter(letter, state)
+            success = guessSuccess
+            message = resultData.first
+            usedLetters = resultData.second
 
-         if (success) {
-            println("MoveProcessor: Phase 2 - Word '$input' correct! Game Over.")
-            revealedWord = state.currentWord.text
-            isGameOver = true
-            // FIX 10: Передаем state в calculateScore (даже если openedCount=0)
-            // Очки за слово = очки сектора (или фиксированная сумма?)
-            scoreChange = calculateScore(state, sector, 0) // Передаем 0, т.к. не открываем букву
-            // Добавим бонус за угаданное слово, если нужно
-            if (scoreChange == 0 && sector !is DrumSector.Bankrupt && sector !is DrumSector.Zero) scoreChange = 500 // Бонус, если сектор был не очковый
-            message = "Правильно! $message. Вы заработали $scoreChange очков."
-            println("MoveProcessor: Phase 2 - Word correct, turn ends, game over.")
-         } else {
-            println("MoveProcessor: Phase 2 - Word '$input' incorrect.")
-            message = "$message. Переход хода."
-            // Очки не меняются, ход переходит
-            println("MoveProcessor: Phase 2 - Word incorrect, turn ends.")
+            if (success) {
+               val oldRevealed = state.revealedWord
+               revealedWord = revealLetter(state.currentWord.text, state.revealedWord, letter)
+               val openedCount = revealedWord.count { it != '*' } - oldRevealed.count { it != '*' }
+               println("MoveProcessor: Letter '$letter' correct. Opened $openedCount letters.")
+
+               scoreChange = calculateScore(state, state.lastSector!!, openedCount)
+
+               message = "Буква '$letter' есть! Вы заработали $scoreChange очков."
+               turnEnds = false
+               message += " Крутите барабан!"
+               println("MoveProcessor: Letter correct, player continues turn (turnEnds=false).")
+
+               if (!revealedWord.contains('*')) {
+                  println("MoveProcessor: Last letter revealed! Game Over.")
+                  isGameOver = true
+                  turnEnds = true
+               }
+            } else {
+               message = "Буква '$letter'. $message. Переход хода."
+               turnEnds = true
+               println("MoveProcessor: Letter incorrect/used, turn ends (turnEnds=true).")
+            }
          }
       }
 
-      // Обновляем счет игрока
+      println("MoveProcessor: Consolidating results. GameOver=$isGameOver, Success=$success, TurnEnds=$turnEnds, ScoreChange=$scoreChange")
+
+      if (isGameOver && success) {
+         if (!isFullWordGuess) {
+            scoreChange = 1000
+            if (!message.contains("Слово угадано!")) {
+               message = (if (message.endsWith(" Крутите барабан!")) message.removeSuffix(" Крутите барабан!") else message).trim() + " Слово полностью открыто! Вы получаете 1000 очков."
+            }
+         }
+         println("MoveProcessor: Game over and success. Final scoreChange set to $scoreChange.")
+      }
+
       var players = state.players
-      if (scoreChange != 0) { // Сравниваем с 0, т.к. очки могут и уменьшиться (хотя здесь нет)
+      if (scoreChange != 0) {
          val currentScore = players[state.currentPlayerIndex].score
          players = updatePlayerScore(players, state.currentPlayerIndex, currentScore + scoreChange)
       }
 
-      // Определяем следующего игрока, если ход заканчивается и игра не окончена
       val nextPlayerIndex = if (turnEnds && !isGameOver) {
          (state.currentPlayerIndex + 1) % state.players.size
       } else {
-         state.currentPlayerIndex // Ход не переходит или игра закончена
+         state.currentPlayerIndex
       }
 
-      // Сбрасываем сектор, если ход переходит или игра окончена
-      // Если ход НЕ переходит (угадал букву), сектор НЕ сбрасываем (он уже null из-за логики?)
-      // Нет, если ход не переходит, значит игрок должен крутить снова, lastSector должен стать null.
-      // Значит, lastSector сбрасывается ВСЕГДА после фазы угадывания.
-      val newLastSector: DrumSector? = null // Всегда null после угадывания
+      val newLastSector: DrumSector? = null
 
-      println("MoveProcessor: Phase 2 - Result: Success=$success, GameOver=$isGameOver, TurnEnds=$turnEnds, NextPlayer=$nextPlayerIndex, ScoreChange=$scoreChange")
+      println("MoveProcessor: Finalizing state update. NextPlayer=$nextPlayerIndex, ScoreChange=$scoreChange, RevealedWord: $revealedWord")
 
       val newState = state.copy(
          players = players,
          currentPlayerIndex = nextPlayerIndex,
          revealedWord = revealedWord,
          usedLetters = usedLetters,
-         lastSector = newLastSector, // Всегда сбрасываем после угадывания
+         lastSector = newLastSector,
          isGameOver = isGameOver,
-         moveCount = state.moveCount + 1 // Увеличиваем счетчик ходов
+         moveCount = state.moveCount + 1
       )
       gameStateManager.updateState(newState)
 
