@@ -45,6 +45,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
    private val _isBotActing = MutableStateFlow(false)
    val isBotActing: StateFlow<Boolean> = _isBotActing.asStateFlow()
 
+   private val _isPlusSectorActionActive = MutableStateFlow(false)
+   val isPlusSectorActionActive: StateFlow<Boolean> = _isPlusSectorActionActive.asStateFlow()
+
    // Предоставляем доступ к состояниям настроек для SettingsScreen
    val isMusicEnabled: StateFlow<Boolean> = gameSettings.isMusicEnabled
    val isSoundEffectsEnabled: StateFlow<Boolean> = gameSettings.isSoundEffectsEnabled
@@ -54,32 +57,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
    val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
 
    // --- Внутреннее состояние пула вопросов ---
-   private var allWords: List<Word> = emptyList() // Мастер-лист слов
-   private var currentWordVersion: Int = 0        // Версия загруженного списка слов
-   private var currentShuffledIndices: MutableList<Int> = mutableListOf() // Текущий порядок индексов
-   private var usedIndicesSet: MutableSet<Int> = mutableSetOf() // Использованные индексы в текущем цикле
+   private var allWords: List<Word> = emptyList()
+   private var currentWordVersion: Int = 0
+   private var currentShuffledIndices: MutableList<Int> = mutableListOf()
+   private var usedIndicesSet: MutableSet<Int> = mutableSetOf()
 
    companion object {
       private const val PREF_POOL_VERSION = "pool_word_version"
       private const val PREF_USED_INDICES = "pool_used_indices"
-      private const val PREF_SHUFFLED_ORDER = "pool_shuffled_order" // Ключ для сохранения порядка
+      private const val PREF_SHUFFLED_ORDER = "pool_shuffled_order"
    }
 
-   // --- Инициализация ---
    init {
       viewModelScope.launch {
-         loadAndPrepareWordPool() // Загружаем слова и состояние пула
-         _isReady.value = true // Устанавливаем готовность ПОСЛЕ подготовки пула
+         loadAndPrepareWordPool()
+         _isReady.value = true
          println("GameViewModel: Set isReady = true")
          playBackgroundMusic()
       }
-      observeBotTurn() // Запускаем наблюдатель за ходом бота
+      observeBotTurn()
+      observeGameStateForPlusSector()
    }
 
-   // Загрузка слов и восстановление/инициализация состояния пула
    private suspend fun loadAndPrepareWordPool() {
       println("GameViewModel: Loading words and preparing pool...")
-      val wordData = wordLoader.loadWords() // Получаем слова и версию
+      val wordData = wordLoader.loadWords()
       allWords = wordData.words
       currentWordVersion = wordData.version
       println("GameViewModel: Loaded ${allWords.size} words, version $currentWordVersion.")
@@ -87,9 +89,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
       if (allWords.isEmpty()) {
          println("GameViewModel ERROR: Word list is empty! Cannot prepare pool.")
          _message.value = "Ошибка: не удалось загрузить слова для игры."
-         // Устанавливаем готовность, но играть будет нельзя
          _isReady.value = true
-         return // Выходим, если слов нет
+         return
       }
 
       // Загружаем сохраненное состояние пула
@@ -288,29 +289,41 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
       soundManager.playSoundEffect(isSuccess)
    }
 
-   // --- Логика Хода Бота ---
    private fun observeBotTurn() {
       viewModelScope.launch {
-         // Используем combine для отслеживания gameState И isBotActing
          combine(gameStateManager.gameState, _isBotActing) { state, acting ->
-            // Эта лямбда будет вызываться при изменении ЛЮБОГО из потоков
-            // state - последнее значение gameState
-            // acting - последнее значение _isBotActing
             Triple(state, acting, state?.players?.getOrNull(state.currentPlayerIndex)?.isBot) // Передаем тройку для удобства
          }.collect { (state, acting, isBotPlayer) ->
-            // Анализируем последнюю комбинацию значений
             println(">>> ViewModel Observer COMBINED: State Player=${state?.currentPlayerIndex}, isBot=$isBotPlayer, isGameOver=${state?.isGameOver}, isActing=$acting")
 
-            // Условие для запуска хода бота
             if (state != null && !state.isGameOver && isBotPlayer == true && !acting) {
                println(">>> ViewModel Observer COMBINED: Bot's Turn Detected for player ${state.currentPlayerIndex}. Launching bot turn cycle...")
-               // Запускаем цикл хода бота, только если он еще не запущен
-               // (Проверка !acting гарантирует это)
                launchBotTurn()
             }
-            // Блок 'else if' для сброса флага больше не нужен здесь,
-            // т.к. сброс происходит в finally блока launchBotTurn,
-            // а combine сам среагирует на изменение acting на false.
+         }
+      }
+   }
+
+   private fun observeGameStateForPlusSector() {
+      viewModelScope.launch {
+         gameState.collect { state ->
+            val isActive = state != null &&
+                  !state.isGameOver &&
+                  state.lastSector is DrumSector.Plus &&
+                  !state.players[state.currentPlayerIndex].isBot &&
+                  !isBotActing.value
+
+            if (_isPlusSectorActionActive.value != isActive) {
+               _isPlusSectorActionActive.value = isActive
+               println("GameViewModel: Plus Sector Action Active changed to $isActive")
+               if (isActive) {
+                  _message.value = "Сектор Плюс! Выберите букву на поле, чтобы её открыть."
+               } else {
+                  // Если _isPlusSectorActionActive выключается, а сообщение было про "Плюс",
+                  // то его можно сбросить, если gameState.message еще не обновился.
+                  // Но обычно gameState.message обновится сам после действия.
+               }
+            }
          }
       }
    }
@@ -319,27 +332,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
       viewModelScope.launch {
          println("ViewModel Bot Turn CYCLE: Starting/Resuming...")
 
-         // Устанавливаем флаг в НАЧАЛЕ цикла (после возможной начальной задержки)
-         var initialDelayDone = false // Флаг, чтобы задержка была только раз
+         var initialDelayDone = false
          if (!_isBotActing.value) {
-            delay(1500) // Задержка только при ПЕРВОМ входе в ход бота
-            // Повторно проверяем состояние после задержки
+            delay(1500)
             val stateBeforeActing = gameState.value
-            if (stateBeforeActing != null && stateBeforeActing.players.getOrNull(stateBeforeActing.currentPlayerIndex)?.isBot == true) {
+            if (stateBeforeActing != null && stateBeforeActing.players.getOrNull(stateBeforeActing.currentPlayerIndex)?.isBot == true && !stateBeforeActing.isGameOver) {
                _isBotActing.value = true
                initialDelayDone = true
                _message.value = "Ход Бота ${stateBeforeActing.players[stateBeforeActing.currentPlayerIndex].name}..."
                println("ViewModel Bot Turn CYCLE: Set isBotActing=true")
             } else {
-               println("ViewModel Bot Turn CYCLE: State changed during initial delay or not bot's turn, aborting.")
-               return@launch // Выходим, если что-то не так после задержки
+               println("ViewModel Bot Turn CYCLE: State changed during initial delay or not bot's turn/game over, aborting.")
+               if(_isBotActing.value) _isBotActing.value = false // Сбросить, если успел установиться
+               return@launch
             }
          } else {
-            // Если флаг уже true (не должно быть при правильной работе combine, но на всякий случай)
             println("ViewModel Bot Turn CYCLE: WARNING - Entered launchBotTurn while isBotActing was already true.")
-            // Не меняем флаг и не делаем задержку
          }
-
 
          try {
             while (true) {
@@ -357,73 +366,120 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                   break
                }
 
-               // Если мы только что установили isBotActing, пропускаем первую проверку currentPlayer?.isBot != true
-               // Это нужно, т.к. combine мог среагировать на isBotActing=true до обновления gameState
                if (!initialDelayDone && !_isBotActing.value) {
                   println("ViewModel Bot Turn CYCLE: Waiting for isBotActing flag to propagate...")
-                  delay(50) // Короткая пауза
-                  initialDelayDone = true // Не делать эту проверку снова
-                  continue // Переходим к следующей итерации, чтобы получить свежее состояние
+                  delay(50)
+                  initialDelayDone = true
+                  continue
                }
 
-
                var currentTurnEnds = false
-               var actionSuccess = false
+               var actionSuccess = false // Для звуковых эффектов и общей логики
 
                if (currentState.lastSector == null) {
                   println("ViewModel Bot Turn CYCLE: Action - Spin needed.")
+                  _message.value = "${currentPlayer.name} (Бот) крутит барабан..."
                   delay(1000)
                   val sector = drumManager.spin()
                   println("ViewModel Bot Turn CYCLE: Spun sector = $sector")
+                  _message.value = "${currentPlayer.name} (Бот) крутит барабан... Выпал сектор: $sector" // Обновляем сообщение с сектором
 
                   println("ViewModel Bot Turn CYCLE: Processing spin result...")
                   val (spinSuccess, spinMsg) = moveProcessor.makeMove(sector, "")
-                  //_message.value = spinMsg
+                  // spinMsg от processSpinResult обычно пустой, сообщение уже установлено выше
                   actionSuccess = spinSuccess
-                  println("ViewModel Bot Turn CYCLE: Spin processed. actionSuccess=$actionSuccess, Message: '$spinMsg'")
+                  println("ViewModel Bot Turn CYCLE: Spin processed. actionSuccess=$actionSuccess")
+
                   if (sector is DrumSector.Bankrupt || sector is DrumSector.Zero || !actionSuccess) {
                      if (!actionSuccess && sector !is DrumSector.Bankrupt && sector !is DrumSector.Zero) {
+                        _message.value = spinMsg.ifEmpty { "${currentPlayer.name} (Бот): Неудачный спин, переход хода." }
                         println("ViewModel Bot Turn CYCLE: Spin resulted in turn end (spinSuccess=false).")
-                     }
-                     playSoundEffect(false) // Звук для конца хода из-за сектора
-                     currentTurnEnds = true
-                  }
-
-               } else { // lastSector != null, угадываем
-                  println("ViewModel Bot Turn CYCLE: Action - Guess needed for sector ${currentState.lastSector}.")
-                  delay(1500)
-                  val botGuess = botLogic.makeBotMove(currentState)
-                  println("ViewModel Bot Turn CYCLE: Bot decided to guess = '$botGuess'")
-
-                  if (botGuess.isNotEmpty()) {
-                     println("ViewModel Bot Turn CYCLE: Processing guess...")
-                     val (guessSuccess, guessMsg) = moveProcessor.makeMove(currentState.lastSector, botGuess)
-                     _message.value = guessMsg
-                     playSoundEffect(guessSuccess)
-                     actionSuccess = guessSuccess
-                     println("ViewModel Bot Turn CYCLE: Guess processed. actionSuccess=$actionSuccess, Message: '$guessMsg'")
-
-                     val stateAfterGuess = gameStateManager.gameState.value
-                     if (stateAfterGuess == null || stateAfterGuess.isGameOver || stateAfterGuess.currentPlayerIndex != currentState.currentPlayerIndex) {
-                        currentTurnEnds = true
-                        println("ViewModel Bot Turn CYCLE: Turn ended after guess (state change).")
                      } else {
-                        currentTurnEnds = false // Угадал букву, ход продолжается
-                        println("ViewModel Bot Turn CYCLE: Guess successful, player continues turn.")
+                        _message.value = spinMsg.ifEmpty { "${currentPlayer.name} (Бот): Сектор $sector. Переход хода." }
+                     }
+                     playSoundEffect(false)
+                     currentTurnEnds = true
+                  } else {
+                     // Если спин успешен и не конец хода, сообщение уже содержит выпавший сектор
+                     // playSoundEffect(true) // Возможно, звук успешного спина (не сектора)
+                  }
+               } else {
+                  val currentSector = currentState.lastSector
+                  val currentPlayerName = currentPlayer.name
+
+                  if (currentSector is DrumSector.Plus) {
+                     println("ViewModel Bot Turn CYCLE: Action - Bot on Plus Sector. Bot will choose a letter to reveal.")
+                     _message.value = "$currentPlayerName (Бот) на секторе Плюс и выбирает букву..."
+                     delay(1500)
+
+                     val botLetterForPlus = botLogic.makeBotPlusSectorMove(currentState)
+                     println("ViewModel Bot Turn CYCLE: Bot decided to 'reveal' letter '$botLetterForPlus' for Plus sector.")
+
+                     if (botLetterForPlus.isNotEmpty()) {
+                        val (plusActionSuccess, plusActionMsg) = moveProcessor.makeMove(currentSector, botLetterForPlus)
+
+                        if (plusActionSuccess) {
+                           _message.value = "$currentPlayerName (Бот) открыл букву '$botLetterForPlus' по сектору Плюс! Крутит снова."
+                        } else {
+                           _message.value = "$currentPlayerName (Бот) пытался использовать Плюс: $plusActionMsg. Крутит снова."
+                        }
+                        playSoundEffect(plusActionSuccess)
+                        actionSuccess = plusActionSuccess
+
+                        val stateAfterPlus = gameStateManager.gameState.value
+                        if (stateAfterPlus == null || stateAfterPlus.isGameOver) {
+                           currentTurnEnds = true
+                           println("ViewModel Bot Turn CYCLE: Bot's turn ended after Plus sector action (game over).")
+                        } else if (stateAfterPlus.currentPlayerIndex != currentState.currentPlayerIndex) {
+                           currentTurnEnds = true
+                           println("ViewModel Bot Turn CYCLE: Bot's turn ended after Plus sector action (player index changed).")
+                        } else {
+                           currentTurnEnds = false
+                           println("ViewModel Bot Turn CYCLE: Bot's Plus action processed, bot continues turn (will spin again).")
+                        }
+                     } else {
+                        println("ViewModel Bot Turn CYCLE: Bot returned empty letter for Plus sector. Bot will spin again.")
+                        _message.value = "$currentPlayerName (Бот) на секторе Плюс. Крутит снова."
+                        currentTurnEnds = false
                      }
                   } else {
-                     println("ViewModel Bot Turn CYCLE: Bot returned empty guess. Assuming turn ends.")
-                     currentTurnEnds = true
+                     println("ViewModel Bot Turn CYCLE: Action - Bot to guess on sector $currentSector.")
+                     _message.value = "$currentPlayerName (Бот) думает над сектором $currentSector..."
+                     delay(1500)
+
+                     val botGuess = botLogic.makeBotMove(currentState)
+                     println("ViewModel Bot Turn CYCLE: Bot decided to guess = '$botGuess'")
+
+                     if (botGuess.isNotEmpty()) {
+                        println("ViewModel Bot Turn CYCLE: Processing bot's guess...")
+                        val (guessSuccess, guessMsg) = moveProcessor.makeMove(currentSector, botGuess)
+                        _message.value = guessMsg
+                        playSoundEffect(guessSuccess)
+                        actionSuccess = guessSuccess
+                        println("ViewModel Bot Turn CYCLE: Bot's guess processed. actionSuccess=$actionSuccess, Message: '$guessMsg'")
+
+                        val stateAfterGuess = gameStateManager.gameState.value
+                        if (stateAfterGuess == null || stateAfterGuess.isGameOver || stateAfterGuess.currentPlayerIndex != currentState.currentPlayerIndex) {
+                           currentTurnEnds = true
+                           println("ViewModel Bot Turn CYCLE: Bot's turn ended after guess (state change).")
+                        } else {
+                           currentTurnEnds = false
+                           println("ViewModel Bot Turn CYCLE: Bot's guess successful, bot continues turn.")
+                        }
+                     } else {
+                        println("ViewModel Bot Turn CYCLE: Bot returned empty guess. Assuming turn ends.")
+                        currentTurnEnds = true
+                     }
                   }
                }
-
-               delay(500) // Пауза между действиями
 
                if (currentTurnEnds) {
                   println("ViewModel Bot Turn CYCLE: Current action ended the turn. Breaking loop.")
                   break
                }
-               println("ViewModel Bot Turn CYCLE: Player continues turn, looping...")
+
+               println("ViewModel Bot Turn CYCLE: Player ${currentPlayer.name} continues turn, looping for next action (e.g. spin).")
+               delay(1000) // Пауза перед следующим действием в цикле (например, перед следующим спином)
 
             } // Конец while(true)
 
@@ -433,14 +489,35 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             _message.value = "Произошла ошибка во время хода бота."
          } finally {
             println("<<< ViewModel Bot Turn CYCLE Finished. Resetting isBotActing=false")
-            delay(100) // Может быть полезно оставить небольшую задержку
-            // Сбрасываем флаг только если он еще true (на случай ошибок или гонок)
+            // Небольшая задержка перед сбросом флага может быть полезна для UI
+            delay(200)
             if(_isBotActing.value) {
                _isBotActing.value = false
             } else {
-               println("<<< ViewModel Bot Turn CYCLE: isBotActing was already false in finally block.")
+               println("<<< ViewModel Bot Turn CYCLE: isBotActing was already false in finally block (or changed concurrently).")
             }
          }
+      }
+   }
+
+   fun selectLetterOnPlusSector(letter: Char) {
+      val state = gameState.value
+
+      if (state != null &&
+         !state.isGameOver &&
+         state.lastSector is DrumSector.Plus &&
+         !state.players[state.currentPlayerIndex].isBot &&
+         !_isBotActing.value) {
+
+         println("GameViewModel: Plus Sector - Player selected letter '$letter'")
+         val (success, msg) = moveProcessor.makeMove(state.lastSector, letter.toString())
+         _message.value = msg
+         playSoundEffect(success)
+
+      } else {
+         println("GameViewModel: Plus Sector - selectLetterOnPlusSector called, but conditions not met. State: $state, isBotActing: ${_isBotActing.value}")
+         // Можно добавить сообщение об ошибке, если это состояние не ожидается
+         // _message.value = "Не время для выбора буквы по сектору Плюс!"
       }
    }
 

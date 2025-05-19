@@ -9,50 +9,42 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-// import com.example.fieldofwonders.data.DrumSector // Не нужен напрямую здесь
+import androidx.compose.ui.text.style.TextAlign
 import com.example.fieldofwonders.data.GameState
 
 @Composable
 fun KeyboardInput(
    gameState: GameState,
-   isPlayerTurn: Boolean, // Получаем флаг снаружи
-   // message: String, // Сообщение теперь отображается в GameScreen
+   isPlayerTurnOverall: Boolean,
+   isPlusSectorActionActive: Boolean,
    onGuess: (String) -> Unit
 ) {
    var wordGuess by remember { mutableStateOf("") }
-   // val showKeyboard by remember { mutableStateOf(false) } // Управляется теперь снаружи + условиями
    val alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
    val scrollState = rememberScrollState()
 
-   // Определяем, нужно ли показывать клавиатуру
-   val shouldShowKeyboard = isPlayerTurn && gameState.lastSector != null
-   // Доп. проверка: Сектор должен позволять угадывать (не Банкрот, не Ноль и т.д.)
-   // Это можно проверять и здесь, но лучше если MoveProcessor сбросит lastSector при таких секторах
-   // && gameState.lastSector !is DrumSector.Zero
-   // && gameState.lastSector !is DrumSector.Bankrupt
+   val showLetterKeyboard = isPlayerTurnOverall && !isPlusSectorActionActive && gameState.lastSector != null
+   val showWordGuessArea = isPlayerTurnOverall && gameState.lastSector != null
 
-   println("Keyboard Render: isPlayerTurn=$isPlayerTurn, lastSector=${gameState.lastSector}, shouldShowKeyboard=$shouldShowKeyboard, usedLetters=${gameState.usedLetters}")
+   println("Keyboard Render: isPlayerTurnOverall=$isPlayerTurnOverall, lastSector=${gameState.lastSector}, showLetterKeyboard=$showLetterKeyboard, showWordGuessArea=$showWordGuessArea, usedLetters=${gameState.usedLetters}")
 
-   // Обертка Column нужна всегда для потенциального сообщения ниже, но контент - условно
    Column(
       modifier = Modifier.fillMaxWidth(),
-      horizontalAlignment = Alignment.CenterHorizontally // Центрируем контент
+      horizontalAlignment = Alignment.CenterHorizontally
    ) {
-      if (shouldShowKeyboard) {
-         // Используем Box чтобы клавиатура не прыгала при скрытии/показе
-         // Можно оставить Column, если поведение устраивает
+      if (showLetterKeyboard) {
          Box(modifier = Modifier.fillMaxWidth()) {
             Column(
                modifier = Modifier
                   .fillMaxWidth()
                   .verticalScroll(scrollState)
-                  .padding(horizontal = 16.dp), // Паддинг для клавиатуры
+                  .padding(horizontal = 16.dp),
                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-               alphabet.chunked(7).forEach { rowLetters -> // По 7 букв для лучшего вида
+               alphabet.chunked(7).forEach { rowLetters ->
                   Row(
                      modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                     horizontalArrangement = Arrangement.Center // Центрируем кнопки в ряду
+                     horizontalArrangement = Arrangement.Center
                   ) {
                      rowLetters.forEach { letter ->
                         val isUsed = gameState.usedLetters.contains(letter)
@@ -60,17 +52,15 @@ fun KeyboardInput(
                            onClick = {
                               if (!isUsed) {
                                  println("Keyboard Action: Guessing letter='$letter'")
-                                 onGuess(letter.toString()) // Вызываем колбэк
+                                 onGuess(letter.toString())
                               }
-                              // Не нужно else с println, кнопка будет disabled
                            },
-                           enabled = !isUsed, // Кнопка неактивна, если буква использована
+                           enabled = !isUsed,
                            modifier = Modifier
-                              .size(45.dp) // Немного уменьшим размер
+                              .size(45.dp)
                               .padding(1.dp),
-                           contentPadding = PaddingValues(0.dp), // Убрать внутренний паддинг кнопки
+                           contentPadding = PaddingValues(0.dp),
                            colors = ButtonDefaults.buttonColors(
-                              // Явные цвета для активной/неактивной кнопки
                               containerColor = MaterialTheme.colorScheme.primary,
                               contentColor = MaterialTheme.colorScheme.onPrimary,
                               disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -79,56 +69,57 @@ fun KeyboardInput(
                         ) {
                            Text(
                               text = letter.toString(),
-                              fontSize = 18.sp // Четче буква
+                              fontSize = 18.sp
                            )
                         }
                      }
                   }
-               } // Конец цикла по рядам букв
-
-               Spacer(modifier = Modifier.height(16.dp))
-
-               // Поле для ввода слова
-               TextField(
-                  value = wordGuess,
-                  onValueChange = { newValue ->
-                     // Ограничиваем ввод только буквами русского алфавита в верхнем регистре
-                     wordGuess = newValue.uppercase().filter { it in alphabet }
-                  },
-                  label = { Text("Назови слово целиком") },
-                  modifier = Modifier.fillMaxWidth(0.8f) // Не на всю ширину
-               )
-
-               Spacer(modifier = Modifier.height(8.dp))
-
-               // Кнопка угадать слово
-               Button(
-                  onClick = {
-                     val finalGuess = wordGuess.trim()
-                     if (finalGuess.isNotEmpty()) {
-                        println("Keyboard Action: Guessing word='$finalGuess'")
-                        onGuess(finalGuess) // Вызываем колбэк
-                        wordGuess = "" // Очищаем поле после попытки
-                     } else {
-                        println("Keyboard Action: Empty word guess, ignoring")
-                     }
-                  },
-                  enabled = wordGuess.isNotBlank(), // Активна только если что-то введено
-                  modifier = Modifier.fillMaxWidth(0.8f) // Не на всю ширину
-               ) {
-                  Text("Угадать слово")
                }
-               Spacer(modifier = Modifier.height(16.dp)) // Отступ снизу
-            } // Конец внутреннего Column клавиатуры
-         } // Конец Box
+               Spacer(modifier = Modifier.height(16.dp))
+            }
+         }
+      } else if (isPlusSectorActionActive && isPlayerTurnOverall) {
+         Text(
+            "Сектор Плюс! Выберите букву на поле или угадайте слово целиком.",
+            modifier = Modifier.padding(bottom = 8.dp, top = 16.dp),
+            textAlign = TextAlign.Center
+         )
+         Spacer(modifier = Modifier.height(100.dp))
       } else {
-         // Можно показать заглушку или пустое место, если клавиатура не нужна
-         // Text("Клавиатура не активна")
-         Spacer(modifier = Modifier.height(200.dp)) // Зарезервировать место, чтобы экран не прыгал
+         Spacer(modifier = Modifier.height(150.dp))
       }
 
-      // Сообщение было перенесено в GameScreen
-      // Spacer(modifier = Modifier.height(16.dp))
-      // Text(text = message, fontSize = 16.sp)
+      if (showWordGuessArea) {
+         TextField(
+            value = wordGuess,
+            onValueChange = { newValue ->
+               wordGuess = newValue.uppercase().filter { it in alphabet }
+            },
+            label = { Text("Назови слово целиком") },
+            modifier = Modifier.fillMaxWidth(0.8f)
+         )
+
+         Spacer(modifier = Modifier.height(8.dp))
+
+         Button(
+            onClick = {
+               val finalGuess = wordGuess.trim()
+               if (finalGuess.isNotEmpty()) {
+                  println("Keyboard Action: Guessing word='$finalGuess'")
+                  onGuess(finalGuess)
+                  wordGuess = ""
+               } else {
+                  println("Keyboard Action: Empty word guess, ignoring")
+               }
+            },
+            enabled = wordGuess.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(0.8f)
+         ) {
+            Text("Угадать слово")
+         }
+         Spacer(modifier = Modifier.height(16.dp))
+      } else if (!showLetterKeyboard) {
+         Spacer(modifier = Modifier.height(80.dp))
+      }
    }
 }

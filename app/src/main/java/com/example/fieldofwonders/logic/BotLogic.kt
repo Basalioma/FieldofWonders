@@ -10,7 +10,7 @@ class BotLogic {
       val alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
       val availableLetters = alphabet.filter { it !in game.usedLetters }
 
-      val canTryGuessWord = game.moveCount >= 4 // Разрешаем угадывать слово начиная с 5-го хода (индекс 4)
+      val canTryGuessWord = game.moveCount >= 4
 
       var shouldGuessWord = false
       if (canTryGuessWord) {
@@ -42,6 +42,35 @@ class BotLogic {
       } else {
          println("BotLogic: No available letters left, forced to guess word.")
          game.currentWord.text
+      }
+   }
+
+   fun makeBotPlusSectorMove(game: GameState): String {
+      println("BotLogic: Plus Sector - Generating letter for bot to reveal.")
+      val alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+
+      val potentialLettersToReveal = mutableListOf<Char>()
+      for (charInWord in game.currentWord.text.uppercase()) {
+         if (charInWord.isLetter() && charInWord !in game.usedLetters && charInWord !in potentialLettersToReveal) {
+            potentialLettersToReveal.add(charInWord)
+         }
+      }
+      println("BotLogic: Plus Sector - Potential letters in word not yet in usedLetters: $potentialLettersToReveal")
+
+      if (potentialLettersToReveal.isNotEmpty()) {
+         val letterToReveal = potentialLettersToReveal.random()
+         println("BotLogic: Plus Sector - Bot chose to reveal letter '$letterToReveal'.")
+         return letterToReveal.toString()
+      } else {
+         val availableAlphabetLetters = alphabet.filter { it !in game.usedLetters }
+         if (availableAlphabetLetters.isNotEmpty()) {
+            val fallbackLetter = availableAlphabetLetters.random()
+            println("BotLogic: Plus Sector - No specific letter to reveal from word (already in usedLetters or word fully known via usedLetters). Bot chose fallback letter '$fallbackLetter'.")
+            return fallbackLetter.toString()
+         } else {
+            println("BotLogic: Plus Sector - All alphabet letters used. Bot defaults to 'А'.")
+            return "А"
+         }
       }
    }
 }
