@@ -68,7 +68,7 @@ fun StartScreen(
       }
 
       Text(
-         text = "v 1.1.1",
+         text = "v 1.2.0",
          fontSize = 14.sp,
          color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
          modifier = Modifier
